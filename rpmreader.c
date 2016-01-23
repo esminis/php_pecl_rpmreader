@@ -372,7 +372,7 @@ PHP_FUNCTION(rpm_get_tag)
 	zval *arg1;
 	php_rpmreader_rsrc *rfr;
 	int found = 0;
-	uint32_t count, rpmtag, intvalue;
+	zend_long count, rpmtag, intvalue;
 	void *storeptr = NULL;
 	rpmIndex *idx;
 
