@@ -30,6 +30,20 @@
 # endif
 #endif
 
+#ifdef NETWARE
+#include <netinet/in.h>
+#endif
+
+#ifndef PHP_WIN32
+# include <netdb.h>
+#else
+#include "win32/inet.h"
+#endif
+
+#if HAVE_ARPA_INET_H
+# include <arpa/inet.h>
+#endif
+
 #ifndef _RPMREADER_IO_H
 #include "rpmreader_io.h"
 #endif
@@ -44,24 +58,38 @@
 
 /* {{{ proto void _free_rpmreader(zend_rsrc_list_entry *rsrc)
    Will free an RPM file resource. */
-void _free_rpmreader(zend_rsrc_list_entry *rsrc TSRMLS_DC)
+void _free_rpmreader(zend_resource *rsc TSRMLS_DC)
 {
+	php_rpmreader_rsrc *rfr = (php_rpmreader_rsrc *)rsc->ptr;
+	
+	if (rfr->rpmhdr) {
+		efree(rfr->rpmhdr);
+		rfr->rpmhdr = 0;
+	}
+	if (rfr->idxlist) {
+		zend_llist_clean(rfr->idxlist);
+		efree(rfr->idxlist);
+		rfr->idxlist = 0;
+	}
+	if (rfr->stream) {
+		php_stream_close(rfr->stream);
+		rfr->stream = 0;
+	}
+	if (rfr->store) {
+		efree(rfr->store);
+		rfr->store = 0;
+	}
+	efree(rsc->ptr);
 }
 /* }}} */
 
 /* {{{ proto void _php_free_rpm_index(void **idx)
    Will free a variable of type rpmIndex that has been emalloc'd during execution. */
-void _php_free_rpm_index(void **idx)
+void _php_free_rpm_index(void *idx)
 {
-	/*
-	rpmIndex *ri = (rpmIndex *) &(*idx);
-	zend_printf("freeing %u ", ri);
-	zend_printf("(%u) ", ri->tag);
-	zend_printf("(%u) ", ri->datatype);
-	zend_printf("(%u) ", ri->offset);
-	zend_printf("(%u)<br>\n", ri->count);
+	
+	rpmIndex *ri = (rpmIndex *)idx;
 	efree(ri);
-	*/
 }
 /* }}} */
 
@@ -159,8 +187,7 @@ int _php_rpm_seek_header(php_stream *stream TSRMLS_DC)
 		}
 	}
 
-	if (found)
-		return bytecount;
+	return found ? bytecount : 0;
 }
 /* }}} */
 
@@ -476,16 +503,20 @@ int _php_rpm_import_indices(php_stream *stream, rpmHeader *hdr,
 
 	if (idxl == NULL) {
 		idxl = (zend_llist *) emalloc(sizeof(zend_llist));
-		zend_llist_init(idxl, sizeof(rpmIndex), (void(*)(void *)) _php_free_rpm_index, 0);
+		zend_llist_init(idxl, sizeof(rpmIndex), _php_free_rpm_index, 0);
 	}
 
 	for (i = 0; i < hdr->num_indices; i++) {
+		idx = 0;
 		nbytes = _php_rpm_fetch_index(stream, &idx TSRMLS_CC);
 		if (nbytes == 0x10) {
 			zend_llist_add_element(idxl, (void *) idx);
 		}
 		else {
 			zend_printf("bytes wrong<br>\n");
+		}
+		if (idx != 0) {
+			efree(idx);
 		}
 	}
 

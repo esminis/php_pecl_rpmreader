@@ -89,8 +89,8 @@ typedef struct _rpmIndexList {
 	rpmIndexNode *tail;
 } rpmIndexList;
 
-void _free_rpmreader(zend_rsrc_list_entry *rsrc TSRMLS_DC);
-void _php_free_rpm_index(void **idx);
+void _free_rpmreader(zend_resource *rsrc TSRMLS_DC);
+void _php_free_rpm_index(void *idx);
 int _php_rpm_validity(php_stream *stream TSRMLS_DC);
 int _php_rpm_seek_header(php_stream *stream TSRMLS_DC);
 int _php_rpm_find_signature(php_stream *stream TSRMLS_DC);

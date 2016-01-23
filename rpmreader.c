@@ -36,6 +36,20 @@
 # endif
 #endif
 
+#ifdef NETWARE
+#include <netinet/in.h>
+#endif
+
+#ifndef PHP_WIN32
+# include <netdb.h>
+#else
+#include "win32/inet.h"
+#endif
+
+#if HAVE_ARPA_INET_H
+# include <arpa/inet.h>
+#endif
+
 #ifndef _RPMREADER_IO_H
 #include "rpmreader_io.h"
 #endif
@@ -253,7 +267,7 @@ PHP_FUNCTION(rpm_open)
 		RETURN_FALSE;
     }
 	
-    rfr->stream = php_stream_open_wrapper(Z_STRVAL_P(fname), "rb", REPORT_ERRORS|ENFORCE_SAFE_MODE|STREAM_MUST_SEEK, NULL);
+    rfr->stream = php_stream_open_wrapper(Z_STRVAL_P(fname), "rb", REPORT_ERRORS|STREAM_MUST_SEEK, NULL);
 	
     if (!rfr->stream) {
 		efree(rfr);
@@ -304,8 +318,7 @@ PHP_FUNCTION(rpm_open)
     }
 
     rfr->store = store;
-	
-    ZEND_REGISTER_RESOURCE(return_value, rfr, le_rpmreader);
+    RETURN_RES(zend_register_resource(rfr, le_rpmreader));
 	}
 	else {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unexpected parameter type");
@@ -327,7 +340,7 @@ PHP_FUNCTION(rpm_is_valid)
 	}
 	
 	if (Z_TYPE_P(fname) == IS_STRING) {
-		stream = php_stream_open_wrapper(Z_STRVAL_P(fname), "rb", REPORT_ERRORS|ENFORCE_SAFE_MODE|STREAM_MUST_SEEK, NULL);
+		stream = php_stream_open_wrapper(Z_STRVAL_P(fname), "rb", REPORT_ERRORS|STREAM_MUST_SEEK, NULL);
 		
 		if (!stream) {
 			RETURN_FALSE;
@@ -359,7 +372,7 @@ PHP_FUNCTION(rpm_get_tag)
 	zval *arg1;
 	php_rpmreader_rsrc *rfr;
 	int found = 0;
-	uint32_t count, rpmtag, intvalue;
+	zend_long count, rpmtag, intvalue;
 	void *storeptr = NULL;
 	rpmIndex *idx;
 
@@ -367,7 +380,9 @@ PHP_FUNCTION(rpm_get_tag)
 		WRONG_PARAM_COUNT;
 	}
 
-	ZEND_FETCH_RESOURCE(rfr, php_rpmreader_rsrc *, &arg1, -1, "RPM file object", le_rpmreader);
+	if ((rfr = (php_rpmreader_rsrc *)zend_fetch_resource_ex(arg1, "RPM file object", le_rpmreader)) == NULL) {
+		RETURN_FALSE;
+	}
 
 	if (rfr == NULL) {
 		RETURN_FALSE;
@@ -412,7 +427,7 @@ PHP_FUNCTION(rpm_get_tag)
 
 	count = idx->count;
 	storeptr = rfr->store;
-	(char *)storeptr += idx->offset;
+	storeptr = ((char *)storeptr) + idx->offset;
 
 	switch (idx->datatype) {
 	case RPM_TYPE_NULL:
@@ -420,13 +435,13 @@ PHP_FUNCTION(rpm_get_tag)
 		break;
 	case RPM_TYPE_CHAR:
 		if (count == 1) {
-			RETURN_STRING((char *) storeptr, 1);
+			RETURN_STRING((char *) storeptr);
 		}
 		else {
 			array_init(return_value);
 			while (count > 0)	{
-				add_next_index_string(return_value, (char *) storeptr, 1);
-				(char *)storeptr += sizeof(char);
+				add_next_index_string(return_value, (char *) storeptr);
+				storeptr = ((char *)storeptr) + sizeof(char);
 				count--;
 			}
 		}
@@ -441,7 +456,7 @@ PHP_FUNCTION(rpm_get_tag)
 			while (count > 0) {
 				intvalue = ntohl(*((uint8_t *) storeptr));
 				add_next_index_long(return_value, (unsigned) intvalue);
-				(char *)storeptr += sizeof(uint8_t);
+				storeptr = ((char *)storeptr) + sizeof(uint8_t);
 				count--;
 			}
 		}
@@ -456,7 +471,7 @@ PHP_FUNCTION(rpm_get_tag)
 			while (count > 0)	{
 				intvalue = ntohl(*((uint16_t *) storeptr));
 				add_next_index_long(return_value, (unsigned) intvalue);
-				(char *)storeptr += sizeof(uint16_t);
+				storeptr = ((char *)storeptr) + sizeof(uint16_t);
 				count--;
 			}
 		}
@@ -471,21 +486,21 @@ PHP_FUNCTION(rpm_get_tag)
 			while (count > 0)	{
 				intvalue = ntohl(*((uint32_t *) storeptr));
 				add_next_index_long(return_value, (unsigned) intvalue);
-				(char *)storeptr += sizeof(uint32_t);
+				storeptr = ((char *)storeptr) + sizeof(uint32_t);
 				count--;
 			}
 		}
 		break;
 	case RPM_TYPE_STRING_ARRAY:
 		if (count == 1) {
-			RETURN_STRING((char *) storeptr, 1);
+			RETURN_STRING((char *) storeptr);
 		}
 		else {
 			array_init(return_value);
 			while (count > 0) {
-				add_next_index_string(return_value, (char *) storeptr, 1);
+				add_next_index_string(return_value, (char *) storeptr);
 				storeptr = strchr((char *) storeptr, 0);
-				((char *)storeptr)++;
+				storeptr = ((char *)storeptr) + 1;
 				count--;
 			}
 		}
@@ -493,7 +508,7 @@ PHP_FUNCTION(rpm_get_tag)
 	case RPM_TYPE_STRING:
 	case RPM_TYPE_BIN:
 	case RPM_TYPE_I18NSTRING:
-		RETURN_STRING((char *) storeptr, 1);
+		RETURN_STRING((char *) storeptr);
 		break;
 	default:
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid datatype in RPM tag");
@@ -513,17 +528,11 @@ PHP_FUNCTION(rpm_close)
 	if (ZEND_NUM_ARGS() != 1 || zend_parse_parameters(1 TSRMLS_CC, "z", &arg) == FAILURE) {
 		WRONG_PARAM_COUNT;
 	}
-	
-	ZEND_FETCH_RESOURCE(rfr, php_rpmreader_rsrc *, &arg, -1, "RPM file object", le_rpmreader);
-	
-	if (rfr->stream)
-		php_stream_close(rfr->stream);
-	if (rfr->rpmhdr)
-		efree(rfr->rpmhdr);
-	if (rfr->idxlist) {
-		zend_llist_clean(rfr->idxlist);
+		
+	if ((rfr = (php_rpmreader_rsrc *)zend_fetch_resource_ex(arg, "RPM file object", le_rpmreader)) == NULL) {
+		RETURN_FALSE;
 	}
-	
+	zend_list_delete(Z_RES_P(arg));	
 	RETURN_TRUE;
 }
 /* }}} */
@@ -532,7 +541,7 @@ PHP_FUNCTION(rpm_close)
    Returns a string representing the current version of rpmreader */
 PHP_FUNCTION(rpm_version)
 {
-	RETURN_STRING(PHP_RPMREADER_VERSION, 1);
+	RETURN_STRING(PHP_RPMREADER_VERSION);
 }
 /* }}} */
  
