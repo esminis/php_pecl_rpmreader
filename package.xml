@@ -17,24 +17,15 @@
  <date>2005-11-01</date>
  <time>12:57:00</time>
  <version>
-  <release>0.3</release>
-  <api>0.3</api>
+  <release>0.5.1</release>
+  <api>0.5.0</api>
  </version>
  <stability>
   <release>beta</release>
   <api>beta</api>
  </stability>
  <license uri="http://www.php.net/license/3_0.txt">PHP 3.0</license>
- <notes>
-  - Added thread safety code to fix rpmreader not compiling with ZTS
-    enabled (Bug #5842) (patch provided by adamg at pld-linux dot org).
-  - Modified minimum PHP requirement in package2.xml to be 4.4.1 instead of
-    5.0 since rpmreader has been reported to compile as far back as 4.4.1
-    (Bug #5843)
-  - Updated internal version string to 0.3beta
-  - Added the rpm_version function to the extension which will return
-    the version of rpmreader currently installed
- </notes>
+ <notes>Ported to PHP7</notes>
  <contents>
   <dir name="/">
    <file role="doc" name="CREDITS"/>
@@ -53,8 +44,7 @@
  <dependencies>
   <required>
    <php>
-    <min>4.4.1</min>
-    <max>5.1.0</max>
+    <min>7.0.0</min>
    </php>
    <pearinstaller>
     <min>1.4.0a2</min>
@@ -64,6 +54,19 @@
  <providesextension>rpmreader</providesextension>
  <extsrcrelease />
  <changelog>
+  <release>
+   <version>
+    <release>0.5.0</release>
+    <api>0.5.0</api>
+   </version>
+   <stability>
+    <release>beta</release>
+    <api>beta</api>
+   </stability>
+   <date>2016-01-24</date>
+   <license uri="http://www.php.net/license/3_0.txt">PHP 3.0</license>
+   <notes>Ported to PHP7</notes>
+  </release>
   <release>
    <version>
     <release>0.2</release>
